@@ -1,0 +1,8 @@
+# Python virtual environment
+/agent_env/
+
+# Environment file with secrets
+.env
+
+# Python cache folder
+/__pycache__/
