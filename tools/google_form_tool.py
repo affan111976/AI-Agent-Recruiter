@@ -57,7 +57,7 @@ def fetch_google_form_responses(sheet_id: str) -> List[Dict]:
         # Authenticate and open spreadsheet
         client = get_sheets_service()
         sheet = client.open_by_key(sheet_id)
-        worksheet = sheet.get_worksheet(0)  # First sheet
+        worksheet = sheet.get_worksheet(0) 
         
         # Get all records as list of dictionaries
         all_records = worksheet.get_all_records()
@@ -67,8 +67,6 @@ def fetch_google_form_responses(sheet_id: str) -> List[Dict]:
         # Transform Google Form data to our candidate format
         candidates = []
         for record in all_records:
-            # Map Google Form columns to our format
-            # Adjust these field names to match YOUR form's column headers
             candidate = {
                 "name": record.get("Name") or record.get("Name"),
                 "email": record.get("email id") or record.get("Email"),
@@ -103,7 +101,6 @@ def get_form_column_mapping(sheet_id: str) -> Dict[str, str]:
         sheet = client.open_by_key(sheet_id)
         worksheet = sheet.get_worksheet(0)
         
-        # Get first row (headers)
         headers = worksheet.row_values(1)
         
         print("\n📋 Your Google Form Columns:")
@@ -120,9 +117,7 @@ def get_form_column_mapping(sheet_id: str) -> Dict[str, str]:
         print(f"Error: {e}")
         return {}
 
-# Standalone function for manual testing
 if __name__ == "__main__":
-    # Test fetching
     sheet_id = os.getenv("GOOGLE_FORM_SHEET_ID")
     if sheet_id:
         print("Testing Google Form integration...\n")
