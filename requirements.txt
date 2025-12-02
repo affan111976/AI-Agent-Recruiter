@@ -8,3 +8,11 @@ python-dotenv
 requests
 fastapi 
 uvicorn
+PyPDF2  # For PDF resume parsing
+python-docx  # For DOCX resume parsing
+python-multipart  # For file uploads
+google-auth-oauthlib  # Already have this
+google-auth-httplib2
+google-api-python-client  # For Sheets API
+gspread  # Easier Google Sheets interface
+oauth2client
