@@ -44,17 +44,20 @@ def run_job_analyst(state: GraphState):
     return {"job_description": json.dumps(job_description, indent=2)}
 
 def get_human_approval(state: GraphState):
+    """Pause and wait for job description approval from Streamlit."""
     print("--- AWAITING JOB DESCRIPTION APPROVAL ---")
-    job_desc_json = state["job_description"]
-    print("Generated Job Description:")
-    print(job_desc_json)
     
-    while True:
-        approval = input("Approve this job description? (yes/no): ").lower()
-        if approval == 'yes':
+    # Check if approval already provided
+    if state.get("job_description_approved") is not None:
+        if state["job_description_approved"]:
+            print("âœ… Job description approved!")
             return {}
-        elif approval == 'no':
+        else:
+            print("âŒ Job description rejected")
             return {"error": "Job description rejected by user."}
+    
+    # Pause workflow - Streamlit will resume it
+    raise NodeInterrupt("Waiting for job description approval")
 
 def post_job_description(state: GraphState):
     """
@@ -258,123 +261,55 @@ def process_interview_confirmation(state: GraphState):
     return {"confirmed_candidates": confirmed_candidates}
 
 def run_interviewer(state: GraphState):
+    """Generate interview kits based on Streamlit selections."""
     print("--- PREPARING INTERVIEWS ---")
-    interviewer_prep_agent = create_interviewer_agent(llm) 
+    
+    screened_candidates = state.get("screened_candidates", [])
+    interview_selections = state.get("interview_selections", {})
+    interview_feedback = state.get("interview_feedback", {})
+    
+    # Check if we need selections
+    if not interview_selections:
+        print("â³ Waiting for interview candidate selections...")
+        raise NodeInterrupt("Waiting for interview candidate selections")
+    
+    # Check if we need feedback
+    if len(interview_feedback) < len([s for s in interview_selections.values() if s == "yes"]):
+        print("â³ Waiting for interview feedback...")
+        raise NodeInterrupt("Waiting for interview feedback")
+    
+    # Process interviews with the provided feedback
+    interviewer_agent = create_interviewer_agent(llm)
     human_feedback_results = []
     
-    # ✅ Only process candidates who have confirmed their interviews
-    screened_candidates = state.get("screened_candidates", [])
-    
-    print(f"\n{'='*70}")
-    print(f"📋 {len(screened_candidates)} shortlisted candidates")
-    print(f"{'='*70}\n")
-    
-    # ✅ Loop through confirmed candidates and ask for approval
     for candidate in screened_candidates:
-        print(f"\n{'─'*70}")
-        print(f"📌 CANDIDATE: {candidate['name']}")
-        print(f"{'─'*70}")
-        print(f"Resume Preview:")
-        print(f"  {candidate['resume'][:200]}...")  # Show first 200 chars
-        print(f"{'─'*70}\n")
+        candidate_name = candidate['name']
+        selection = interview_selections.get(candidate_name, "skip")
         
-        # ✅ Ask for human approval before generating interview kit
-        while True:
-            approval = input(f"Generate interview kit for {candidate['name']}? (yes/no/skip): ").lower().strip()
-            
-            if approval == 'yes':
-                print(f"\n✅ Generating interview kit for {candidate['name']}...\n")
-                break
-            elif approval == 'no':
-                print(f"❌ Skipping {candidate['name']} - will not interview this candidate.\n")
-                # Add a rejection entry
-                human_feedback_results.append({
-                    "candidate_name": candidate["name"],
-                    "interview_questions": [],
-                    "evaluation": "Candidate skipped by HR - not interviewed", 
-                    "recommendation": "Reject"
-                })
-                break
-            elif approval == 'skip':
-                print(f"⏭️ Skipping {candidate['name']} for now.\n")
-                break
-            else:
-                print("❌ Invalid input. Please enter 'yes', 'no', or 'skip'.")
-        
-        # If user said 'no' or 'skip', continue to next candidate
-        if approval != 'yes':
-            continue
-        
-        # ✅ Generate interview kit (only if approved)
-        print(f"--- Generating Interview Kit for: {candidate['name']} ---")
-        
-        try:
-            # AI generates the prep kit
-            prep_kit = interviewer_prep_agent.invoke({
+        if selection == "no":
+            human_feedback_results.append({
+                "candidate_name": candidate_name,
+                "interview_questions": [],
+                "evaluation": "Candidate skipped by HR - not interviewed",
+                "recommendation": "Reject"
+            })
+        elif selection == "yes":
+            # Generate interview kit
+            prep_kit = interviewer_agent.invoke({
                 "job_description": state["job_description"],
-                "candidate_name": candidate["name"],
+                "candidate_name": candidate_name,
                 "candidate_resume": candidate["resume"]
             })
             
-            print("\n" + "="*70)
-            print(f"📝 INTERVIEW PREPARATION KIT - {candidate['name']}")
-            print("="*70)
-            print(f"\n🔍 AI Evaluation Summary:")
-            print(f"   {prep_kit.evaluation}\n")
-            print(f"❓ Suggested Interview Questions:")
-            for i, q in enumerate(prep_kit.questions, 1):
-                print(f"   {i}. {q}")
-            print("\n" + "="*70)
-            
-            # ✅ Graph pauses to collect human feedback after interview
-            print(f"\n🎤 CONDUCT THE INTERVIEW WITH {candidate['name']}")
-            print("="*70)
-            
-            conduct = input("\nHave you conducted the interview? (yes/skip): ").lower().strip()
-            
-            if conduct != 'yes':
-                print(f"⏸️ Interview not conducted yet for {candidate['name']}. Skipping feedback.\n")
-                continue
-            
-            print("\n📋 Please provide your feedback:")
-            evaluation = input("  Enter your evaluation summary: ").strip()
-            
-            while True:
-                recommendation = input("  Your recommendation (Progress/Reject): ").strip().capitalize()
-                if recommendation in ['Progress', 'Reject']:
-                    break
-                print("  ❌ Please enter either 'Progress' or 'Reject'")
+            # Get feedback from state
+            feedback = interview_feedback.get(candidate_name, {})
             
             human_feedback_results.append({
-                "candidate_name": candidate["name"],
+                "candidate_name": candidate_name,
                 "interview_questions": prep_kit.questions,
-                "evaluation": evaluation, 
-                "recommendation": recommendation
+                "evaluation": feedback.get("evaluation", "No feedback provided"),
+                "recommendation": feedback.get("recommendation", "Reject")
             })
-            
-            print(f"✅ Feedback recorded for {candidate['name']}\n")
-            
-        except Exception as e:
-            print(f"❌ Error generating interview kit for {candidate['name']}: {e}")
-            print("Skipping this candidate...\n")
-            continue
-    
-    # ✅ Summary
-    print("\n" + "="*70)
-    print("📊 INTERVIEW STAGE SUMMARY")
-    print("="*70)
-    print(f"Total candidates confirmed: {len(screened_candidates)}")
-    print(f"Interviews conducted: {len(human_feedback_results)}")
-    
-    if human_feedback_results:
-        print("\nResults:")
-        for result in human_feedback_results:
-            status = "✅ Progress" if result['recommendation'] == 'Progress' else "❌ Reject"
-            print(f"  • {result['candidate_name']}: {status}")
-    else:
-        print("\n⚠️ No interviews were conducted.")
-    
-    print("="*70 + "\n")
     
     return {"interview_results": human_feedback_results}
 
@@ -403,23 +338,25 @@ def run_decision_maker(state: GraphState):
 
 # Get final approval before sending offers
 def get_final_offer_approval(state: GraphState):
+    """Pause and wait for final offer approval from Streamlit."""
     print("--- AWAITING FINAL OFFER APPROVAL ---")
-    final_shortlist = state["final_shortlist"]
+    
+    final_shortlist = state.get("final_shortlist", [])
     
     if not final_shortlist:
-        print("AI recommended no candidates for the final shortlist.")
         return {"error": "No candidates to make offers to."}
-
-    print("AI has recommended the following candidates for offers:")
-    for name in final_shortlist:
-        print(f"- {name}")
     
-    while True:
-        approval = input("Do you approve sending offers to this shortlist? (yes/no): ").lower()
-        if approval == 'yes':
-            return {} 
-        elif approval == 'no':
-            return {"error": "Final shortlist rejected by user. Halting process."}
+    # Check if approval already provided
+    if state.get("final_offer_approved") is not None:
+        if state["final_offer_approved"]:
+            print("âœ… Final offers approved!")
+            return {}
+        else:
+            print("âŒ Final offers rejected")
+            return {"error": "Final shortlist rejected by user."}
+    
+    # Pause workflow
+    raise NodeInterrupt("Waiting for final offer approval")
 
 def send_offers(state: GraphState):
     """Send offer emails with onboarding form link."""

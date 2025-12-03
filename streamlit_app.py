@@ -20,6 +20,12 @@ st.set_page_config(
 # API_BASE_URL comes from config and uses the machine's local IP
 
 # Initialize session state
+if 'current_interrupt' not in st.session_state:
+    st.session_state.current_interrupt = None
+if 'interview_selections' not in st.session_state:
+    st.session_state.interview_selections = {}
+if 'interview_feedback' not in st.session_state:
+    st.session_state.interview_feedback = {}
 if 'workflow_started' not in st.session_state:
     st.session_state.workflow_started = False
 if 'job_id' not in st.session_state:
@@ -130,7 +136,13 @@ with st.sidebar:
         st.rerun()
 
 # Main content area with tabs
-tab1, tab2, tab3, tab4 = st.tabs(["🚀 Start Workflow", "📨 Offer Responses", "📊 Dashboard", "🔍 Debug"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "ðŸš€ Start Workflow", 
+    "âœ… Approvals", 
+    "ðŸ Offer Responses", 
+    "ðŸ Dashboard", 
+    "ðy Debug"
+])
 
 # Tab 1: Start Workflow
 with tab1:
@@ -169,196 +181,369 @@ with tab1:
                     # Save initial state
                     save_state(job_id, initial_state)
                     
-                    # Start workflow
                     try:
                         st.session_state.workflow_stage = "Running..."
                         
-                        # Create a placeholder for real-time updates
+                        # Create placeholders
                         status_placeholder = st.empty()
                         logs_placeholder = st.empty()
                         
-                        # Run the workflow
+                        # ✅ Run workflow node by node
                         for event in st.session_state.graph_app.stream(initial_state, config):
                             for node_name, node_output in event.items():
                                 st.session_state.workflow_stage = f"Executing: {node_name}"
                                 status_placeholder.info(f"🔄 **Current Node:** {node_name}")
                                 
-                                # Show relevant output
-                                with logs_placeholder.expander(f"📋 {node_name} Output", expanded=True):
+                                # Show output
+                                with logs_placeholder.expander(f"📋 {node_name} Output", expanded=False):
                                     if isinstance(node_output, dict):
                                         st.json(node_output)
                                     else:
                                         st.write(node_output)
-                        
-                        st.session_state.workflow_started = True
-                        st.session_state.workflow_stage = "Paused - Waiting for Offer Responses"
-                        
-                        st.success("✅ Workflow executed successfully!")
-                        st.info("📧 Offer emails have been sent. Please check the 'Offer Responses' tab to simulate candidate replies.")
-                        
-                        # ✅ Load from LangGraph state, not db.py
-                        try:
-                            config = {"configurable": {"thread_id": job_id}}
-                            final_graph_state = st.session_state.graph_app.get_state(config)
-                            final_state = final_graph_state.values
                             
-                            if final_state and 'offers_sent' in final_state and final_state['offers_sent']:
-                                st.markdown("### 📤 Offers Sent To:")
-                                for candidate in final_state['offers_sent']:
-                                    st.markdown(f"- ✉️ **{candidate}**")
-                            else:
-                                st.warning("No offers were sent. Check the workflow logs above.")
-                        except Exception as e:
-                            st.error(f"Error loading offer status: {str(e)}")
+                            # ✅ Check for interrupts AFTER EACH EVENT
+                            config_check = {"configurable": {"thread_id": job_id}}
+                            graph_state = st.session_state.graph_app.get_state(config_check)
+                            
+                            if graph_state.next:  # Workflow paused
+                                next_node = graph_state.next[0] if isinstance(graph_state.next, list) else graph_state.next
+                                
+                                # Store in session state for Tab 2
+                                st.session_state.workflow_stage = f"⏸️ Paused at: {next_node}"
+                                st.session_state.workflow_started = True
+                                
+                                status_placeholder.empty()  # Clear spinning indicator
+                                logs_placeholder.empty()
+                                
+                                st.success("✅ Workflow started successfully!")
+                                
+                                # Show specific message based on where it's paused
+                                if next_node == "human_approval":
+                                    st.info("📋 **Action Required:** Please go to the **'✅ Approvals'** tab to review the job description.")
+                                elif next_node == "interviewer":
+                                    st.info("🎤 **Action Required:** Please go to the **'✅ Approvals'** tab to select interview candidates.")
+                                elif next_node == "final_offer_approval":
+                                    st.info("💼 **Action Required:** Please go to the **'✅ Approvals'** tab to approve final offers.")
+                                elif next_node == "wait_for_offer_responses":
+                                    st.info("📨 **Action Required:** Waiting for candidate responses. Go to **'📨 Offer Responses'** tab.")
+                                
+                                break  # Stop processing
+                        
+                        # If loop completes without interrupt
+                        if not graph_state.next:
+                            st.session_state.workflow_started = True
+                            st.session_state.workflow_stage = "✅ Completed"
+                            st.success("🎉 Workflow completed successfully!")
                         
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
                         st.exception(e)
-    else:
+    
+    else:  # Workflow already started
         st.success("✅ Workflow is active!")
         st.info(f"**Job ID:** `{st.session_state.job_id}`")
-        st.markdown("Navigate to the **Offer Responses** tab to continue the workflow.")
+        
+        # Show current status
+        try:
+            config = {"configurable": {"thread_id": st.session_state.job_id}}
+            graph_state = st.session_state.graph_app.get_state(config)
+            
+            if graph_state.next:
+                next_node = graph_state.next[0] if isinstance(graph_state.next, list) else graph_state.next
+                
+                st.markdown("### ⏸️ Workflow Paused")
+                st.warning(f"**Waiting at node:** `{next_node}`")
+                
+                # Show actionable message
+                if next_node == "human_approval":
+                    st.info("👉 Go to the **'✅ Approvals'** tab to review the job description.")
+                elif next_node == "interviewer":
+                    st.info("👉 Go to the **'✅ Approvals'** tab to select candidates for interviews.")
+                elif next_node == "final_offer_approval":
+                    st.info("👉 Go to the **'✅ Approvals'** tab to approve final offers.")
+                elif next_node == "wait_for_offer_responses":
+                    st.info("👉 Go to the **'📨 Offer Responses'** tab to simulate candidate responses.")
+            else:
+                st.success("✅ Workflow completed!")
+        
+        except Exception as e:
+            st.error(f"Error checking status: {e}")
 
-# Tab 2: Offer Responses (Simulated Webhook Interface)
+# Tab 2: Human Approvals
 with tab2:
-    st.header("📨 Candidate Offer Responses")
+    st.header("✅ Human Approval Required")
+    
+    # ✅ REFRESH BUTTON
+    col1, col2 = st.columns([4, 1])
+    with col2:
+        if st.button("🔄 Refresh", key="refresh_approvals_top", use_container_width=True):
+            st.rerun()
     
     if not st.session_state.job_id:
         st.warning("⚠️ Please start a workflow first in the 'Start Workflow' tab.")
     else:
-        # ✅ CRITICAL FIX: Read from LangGraph state, not db.py
-        col_refresh, col_spacer = st.columns([1, 4])
-        with col_refresh:
-            if st.button("🔄 Refresh Status", use_container_width=True):
-                st.rerun()
+        config = {"configurable": {"thread_id": st.session_state.job_id}}
+        
         try:
-            config = {"configurable": {"thread_id": st.session_state.job_id}}
+            # ✅ FORCE FRESH STATE READ
             graph_state = st.session_state.graph_app.get_state(config)
-            current_state = graph_state.values
             
-            if current_state and 'offers_sent' in current_state:
-                offers_sent = current_state.get('offers_sent', [])
-                offer_responses = current_state.get('offer_responses', [])
+            # ✅ CRITICAL DEBUG - ALWAYS EXPANDED SO YOU CAN SEE IT
+            with st.expander("🔍 Debug: Current State", expanded=True):
+                st.write(f"**Next Node (raw):** `{repr(graph_state.next)}`")
+                st.write(f"**Next Node (type):** `{type(graph_state.next)}`")
+                st.write(f"**Workflow Stage:** `{st.session_state.workflow_stage}`")
                 
-                # Show progress
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("📤 Offers Sent", len(offers_sent))
-                with col2:
-                    st.metric("✅ Responses Received", len(offer_responses))
-                with col3:
-                    st.metric("⏳ Pending", len(offers_sent) - len(offer_responses))
-                
-                st.markdown("---")
-                
-                # Get candidates who haven't responded
-                responded_candidates = [r['candidate'] for r in offer_responses]
-                pending_candidates = [c for c in offers_sent if c not in responded_candidates]
-                
-                if pending_candidates:
-                    st.markdown("### 📋 Pending Responses")
-                    st.info(f"Waiting for responses from {len(pending_candidates)} candidate(s)")
+                # Show what we're checking
+                if graph_state.next:
+                    if isinstance(graph_state.next, tuple):
+                        st.warning(f"⚠️ Next is a TUPLE: {graph_state.next}")
+                        st.info("Converting tuple to string for comparison...")
+                    elif isinstance(graph_state.next, list):
+                        st.success(f"✅ Next is a LIST: {graph_state.next}")
+                    else:
+                        st.info(f"ℹ️ Next is: {type(graph_state.next)}")
                     
-                    # Create response form for each pending candidate
-                    for candidate in pending_candidates:
-                        with st.expander(f"💬 Respond as: **{candidate}**", expanded=False):
-                            col1, col2 = st.columns([3, 1])
+                    st.success("✅ Workflow IS interrupted - approval UI should appear")
+                else:
+                    st.warning("⚠️ Workflow is NOT interrupted (next is empty)")
+            
+            # ✅ FIX: Handle tuple properly
+            if graph_state.next:
+                # Convert whatever format to string
+                if isinstance(graph_state.next, tuple):
+                    next_node = graph_state.next[0] if len(graph_state.next) > 0 else None
+                elif isinstance(graph_state.next, list):
+                    next_node = graph_state.next[0] if len(graph_state.next) > 0 else None
+                else:
+                    next_node = str(graph_state.next)
+                
+                st.info(f"📍 **Detected Next Node:** `{next_node}`")
+                
+                # ==============================
+                # 1. JOB DESCRIPTION APPROVAL
+                # ==============================
+                if next_node == "human_approval":
+                    st.markdown("### 📝 Job Description Approval Required")
+                    
+                    job_desc_json = graph_state.values.get("job_description")
+                    
+                    if job_desc_json:
+                        try:
+                            job_desc = json.loads(job_desc_json)
+                            
+                            # Display job description
+                            st.markdown(f"## {job_desc.get('title', 'N/A')}")
+                            st.markdown(f"**Company:** {job_desc.get('company', 'N/A')}")
+                            
+                            col1, col2 = st.columns(2)
                             
                             with col1:
-                                response = st.radio(
-                                    f"Select {candidate}'s response:",
-                                    ["Accepted", "Rejected", "Negotiation"],
-                                    key=f"response_{candidate}",
-                                    horizontal=True
-                                )
+                                st.markdown("### 📋 Responsibilities")
+                                for resp in job_desc.get('responsibilities', []):
+                                    st.markdown(f"- {resp}")
                             
                             with col2:
-                                if st.button("📤 Submit", key=f"submit_{candidate}", use_container_width=True):
-                                    with st.spinner(f"Processing {candidate}'s response..."):
-                                        try:
-                                            # Update state with offer reply
-                                            st.session_state.graph_app.update_state(
-                                                config,
-                                                {
-                                                    "offer_reply": {
-                                                        "candidate": candidate,
-                                                        "status": response
-                                                    }
+                                st.markdown("### 🎓 Qualifications")
+                                for qual in job_desc.get('qualifications', []):
+                                    st.markdown(f"- {qual}")
+                            
+                            st.markdown("### 🎁 What We Offer")
+                            for offer in job_desc.get('offerings', []):
+                                st.markdown(f"- {offer}")
+                            
+                            # Approval buttons
+                            st.markdown("---")
+                            col1, col2, col3 = st.columns([1, 1, 2])
+                            
+                            with col1:
+                                if st.button("✅ Approve", key="approve_job_desc", use_container_width=True):
+                                    with st.spinner("Approving and continuing workflow..."):
+                                        st.session_state.graph_app.update_state(
+                                            config,
+                                            {"job_description_approved": True}
+                                        )
+                                        # Resume workflow
+                                        for event in st.session_state.graph_app.stream(None, config):
+                                            pass
+                                        st.success("✅ Job description approved!")
+                                        time.sleep(1)
+                                        st.rerun()
+                            
+                            with col2:
+                                if st.button("❌ Reject", key="reject_job_desc", use_container_width=True):
+                                    st.session_state.graph_app.update_state(
+                                        config,
+                                        {"job_description_approved": False}
+                                    )
+                                    # Resume workflow
+                                    for event in st.session_state.graph_app.stream(None, config):
+                                        pass
+                                    st.error("❌ Job description rejected. Workflow ended.")
+                                    time.sleep(1)
+                                    st.rerun()
+                        
+                        except json.JSONDecodeError:
+                            st.error("Error parsing job description")
+                    else:
+                        st.error("Job description not found in state")
+                
+                # ==============================
+                # 2. INTERVIEW SELECTIONS
+                # ==============================
+                elif next_node == "interviewer":
+                    st.markdown("### 🎤 Interview Candidate Selection")
+                    
+                    screened_candidates = graph_state.values.get("screened_candidates", [])
+                    
+                    if screened_candidates:
+                        st.info(f"📊 {len(screened_candidates)} candidates passed screening. Select who to interview:")
+                        
+                        existing_selections = graph_state.values.get("interview_selections", {})
+                        existing_feedback = graph_state.values.get("interview_feedback", {})
+                        
+                        # STAGE 1: Get selections
+                        if not existing_selections:
+                            with st.form("interview_selections_form"):
+                                selections = {}
+                                
+                                for candidate in screened_candidates:
+                                    st.markdown(f"#### {candidate['name']}")
+                                    st.caption(candidate['resume'][:200] + "...")
+                                    
+                                    selections[candidate['name']] = st.radio(
+                                        f"Decision for {candidate['name']}:",
+                                        ["yes", "no", "skip"],
+                                        format_func=lambda x: {"yes": "✅ Interview", "no": "❌ Reject", "skip": "⏭️ Skip"}[x],
+                                        key=f"select_{candidate['name']}",
+                                        horizontal=True
+                                    )
+                                    st.markdown("---")
+                                
+                                if st.form_submit_button("📤 Submit Selections", use_container_width=True):
+                                    with st.spinner("Processing selections..."):
+                                        st.session_state.graph_app.update_state(
+                                            config,
+                                            {"interview_selections": selections}
+                                        )
+                                        st.success("✅ Selections saved!")
+                                        time.sleep(1)
+                                        st.rerun()
+                        
+                        # STAGE 2: Get feedback
+                        else:
+                            st.success("✅ Initial selections recorded")
+                            
+                            to_interview = [name for name, sel in existing_selections.items() if sel == "yes"]
+                            
+                            if to_interview:
+                                st.markdown(f"### 📝 Conducting Interviews ({len(to_interview)} candidates)")
+                                
+                                if len(existing_feedback) >= len(to_interview):
+                                    st.success("✅ All interviews complete! Continuing workflow...")
+                                    for event in st.session_state.graph_app.stream(None, config):
+                                        pass
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    with st.form("interview_feedback_form"):
+                                        feedback = {}
+                                        
+                                        for candidate_name in to_interview:
+                                            if candidate_name not in existing_feedback:
+                                                st.markdown(f"#### 🎤 Interview Feedback: {candidate_name}")
+                                                
+                                                feedback[candidate_name] = {
+                                                    "evaluation": st.text_area(
+                                                        f"Evaluation for {candidate_name}:",
+                                                        key=f"eval_{candidate_name}",
+                                                        height=100
+                                                    ),
+                                                    "recommendation": st.radio(
+                                                        f"Recommendation for {candidate_name}:",
+                                                        ["Progress", "Reject"],
+                                                        key=f"rec_{candidate_name}",
+                                                        horizontal=True
+                                                    )
                                                 }
-                                            )
-                                            
-                                            # Resume the graph
-                                            for event in st.session_state.graph_app.stream(None, config):
-                                                pass
-                                            
-                                            st.success(f"✅ Response from {candidate} ({response}) processed!")
-                                            st.balloons()
-                                            time.sleep(1)
-                                            st.rerun()
-                                            
-                                        except Exception as e:
-                                            st.error(f"Error: {str(e)}")
-                                            st.exception(e)
+                                                st.markdown("---")
+                                        
+                                        if st.form_submit_button("📤 Submit Feedback", use_container_width=True):
+                                            with st.spinner("Processing feedback..."):
+                                                all_feedback = {**existing_feedback, **feedback}
+                                                
+                                                st.session_state.graph_app.update_state(
+                                                    config,
+                                                    {"interview_feedback": all_feedback}
+                                                )
+                                                
+                                                for event in st.session_state.graph_app.stream(None, config):
+                                                    pass
+                                                
+                                                st.success("✅ Feedback submitted!")
+                                                time.sleep(1)
+                                                st.rerun()
+                            else:
+                                st.info("No candidates selected for interviews. Continuing workflow...")
+                                for event in st.session_state.graph_app.stream(None, config):
+                                    pass
+                                time.sleep(1)
+                                st.rerun()
+                
+                # ==============================
+                # 3. FINAL OFFER APPROVAL
+                # ==============================
+                elif next_node == "final_offer_approval":
+                    st.markdown("### 💼 Final Offer Approval")
+                    
+                    final_shortlist = graph_state.values.get("final_shortlist", [])
+                    
+                    if final_shortlist:
+                        st.success(f"🏆 AI recommends sending offers to {len(final_shortlist)} candidate(s):")
+                        
+                        for candidate in final_shortlist:
+                            st.markdown(f"- ✅ **{candidate}**")
+                        
+                        st.markdown("---")
+                        col1, col2, col3 = st.columns([1, 1, 2])
+                        
+                        with col1:
+                            if st.button("✅ Approve Offers", key="approve_offers", use_container_width=True):
+                                with st.spinner("Approving and sending offers..."):
+                                    st.session_state.graph_app.update_state(
+                                        config,
+                                        {"final_offer_approved": True}
+                                    )
+                                    for event in st.session_state.graph_app.stream(None, config):
+                                        pass
+                                    st.success("✅ Offers approved and sent!")
+                                    time.sleep(1)
+                                    st.rerun()
+                        
+                        with col2:
+                            if st.button("❌ Reject", key="reject_offers", use_container_width=True):
+                                st.session_state.graph_app.update_state(
+                                    config,
+                                    {"final_offer_approved": False}
+                                )
+                                for event in st.session_state.graph_app.stream(None, config):
+                                    pass
+                                st.error("❌ Offers rejected. Workflow ended.")
+                                time.sleep(1)
+                                st.rerun()
+                    else:
+                        st.warning("No candidates in final shortlist")
+                
                 else:
-                    st.success("🎉 All candidates have responded!")
-                    
-                    # Show summary
-                    st.markdown("### 📊 Response Summary")
-                    
-                    acceptances = [r for r in offer_responses if r['status'] == 'Accepted']
-                    rejections = [r for r in offer_responses if r['status'] == 'Rejected']
-                    negotiations = [r for r in offer_responses if r['status'] == 'Negotiation']
-                    
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.markdown('<div class="success-box">', unsafe_allow_html=True)
-                        st.markdown(f"### ✅ Accepted ({len(acceptances)})")
-                        for acc in acceptances:
-                            st.write(f"- {acc['candidate']}")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with col2:
-                        st.markdown('<div class="warning-box">', unsafe_allow_html=True)
-                        st.markdown(f"### ❌ Rejected ({len(rejections)})")
-                        for rej in rejections:
-                            st.write(f"- {rej['candidate']}")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with col3:
-                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                        st.markdown(f"### 💬 Negotiation ({len(negotiations)})")
-                        for neg in negotiations:
-                            st.write(f"- {neg['candidate']}")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    if acceptances and 'onboarding_submissions' in current_state:
-                        st.markdown("### 📋 Onboarding Information Received")
-                        
-                        # ✅ Loop through the submissions list
-                        all_submissions = current_state['onboarding_submissions']
-                        
-                        for submission in all_submissions:
-                            st.markdown(f"""
-                            <div class="info-box">
-                                <h4>✅ {submission['candidate']}</h4>
-                                <p><strong>Start Date:</strong> {submission.get('joining_date', 'Not provided')}</p>
-                                <p><strong>Comments:</strong> {submission.get('comments', 'None')}</p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    
-                    # Only show error if there are NO acceptances at all
-                    elif not acceptances:
-                        st.error("😞 No candidates accepted the offer. Hiring process concluded.")
-                        st.session_state.workflow_complete = True
+                    st.warning(f"⚠️ Unknown node: `{next_node}`")
+                    st.info("Workflow is at an unhandled interrupt point")
+            
             else:
-                st.info("⏳ No offers have been sent yet. Complete the workflow in the 'Start Workflow' tab first.")
+                st.success("✅ No approvals needed right now. Workflow is running or completed.")
+        
         except Exception as e:
-            st.error(f"Error loading offer status: {str(e)}")
+            st.error(f"Error checking approval status: {str(e)}")
             st.exception(e)
-    
-    st.info("💡 Candidates respond via onboarding forms sent in offer emails")
-    st.markdown("Response options: **Accept** (with joining date), **Negotiate**, or **Reject**")
 
 # Tab 3: Dashboard
 with tab3:

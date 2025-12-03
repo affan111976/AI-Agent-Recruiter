@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  # Container 1: The Backend API
+  api:
+    build: .
+    container_name: hr_agent_api
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file: .env
+
+  # Container 2: The Frontend UI
+  frontend:
+    build: .
+    container_name: hr_agent_ui
+    # Override the default command to run Streamlit instead
+    command: streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    env_file: .env
+    depends_on:
+      - api

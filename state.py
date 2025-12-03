@@ -61,5 +61,8 @@ class GraphState(TypedDict):
     onboarding_submissions: Optional[List[Dict[str, str]]]  # Completed submissions
     onboarding_submission: Optional[Dict[str, str]]  # Single submission being processed
     hiring_status: Optional[str]  # Final status
-
+    job_description_approved: Optional[bool]
+    interview_selections: Optional[dict]
+    interview_feedback: Optional[dict]
+    final_offer_approved: Optional[bool]
 

@@ -42,3 +42,5 @@ job_posting_*.txt
 .vscode/
 .idea/
 .DS_Store
+.dockerignore
+.hiring_workflows.json

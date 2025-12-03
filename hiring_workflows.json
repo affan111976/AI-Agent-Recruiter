@@ -1,0 +1,18 @@
+{
+  "7a8c4521-b2f0-4f25-82af-27bc7ddd1a07": {
+    "offers_sent": [
+      "Affan Ahmad Ansari"
+    ],
+    "offer_responses": [],
+    "job_description": "{\n  \"title\": \"Software Developer\",\n  \"company\": \"ABC Technologies Inc.\",\n  \"responsibilities\": [\n    \"Design, develop, and test software applications to meet business requirements\",\n    \"Collaborate with cross-functional teams to identify and prioritize project requirements\",\n    \"Write clean, efficient, and well-documented code using various programming languages and technologies\",\n    \"Troubleshoot and resolve technical issues, and provide support for existing software applications\",\n    \"Participate in code reviews and contribute to the improvement of the overall quality of the codebase\"\n  ],\n  \"qualifications\": [\n    \"Bachelor's degree in Computer Science, Software Engineering, or a related field\",\n    \"At least 3 years of experience in software development, with a focus on languages such as Java, Python, or C++\",\n    \"Strong understanding of software development principles, patterns, and practices\",\n    \"Experience with Agile development methodologies and version control systems such as Git\",\n    \"Excellent problem-solving skills, with the ability to analyze complex issues and develop creative solutions\"\n  ],\n  \"offerings\": [\n    \"Competitive salary and benefits package\",\n    \"Opportunities for professional growth and career advancement\",\n    \"Collaborative and dynamic work environment with a team of experienced professionals\",\n    \"Access to cutting-edge technologies and tools\",\n    \"Flexible work arrangements, including remote work options and flexible hours\"\n  ]\n}",
+    "screened_candidates": [
+      {
+        "name": "Affan Ahmad Ansari",
+        "email": "imaffan99@gmail.com",
+        "phone": 7522825897,
+        "resume": "Experienced Python developer with 5+ years of experience. Strong background in web scraping, data analysis, and building REST APIs. Proficient in Django, Flask, and FastAPI. Has worked on multiple e-commerce platforms and data pipeline projects",
+        "applied_at": "09/11/2025 00:14:12"
+      }
+    ]
+  }
+}

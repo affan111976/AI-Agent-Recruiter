@@ -16,3 +16,8 @@ google-auth-httplib2
 google-api-python-client  # For Sheets API
 gspread  # Easier Google Sheets interface
 oauth2client
+langgraph-checkpoint-sqlite
+streamlit
+python-multipart
+email-validator
+langchain-groq
