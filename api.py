@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import FastAPI, Request, HTTPException
 from fastapi import Form, UploadFile, File
 from fastapi.responses import HTMLResponse  # ✅ Import at the top
@@ -567,7 +568,7 @@ async def handle_offer_reply_post(payload: OfferReplyRequest):
         current_state = graph_app.get_state(config)
         print(f"Current workflow state: {current_state}")
         
-        print(f"\n✅ Updating state with reply from {candidate}: {reply}")
+        print(f"\n✅ Updating state with reply from {candidate_name}: {reply}")
         graph_app.update_state(
             config,
             {
