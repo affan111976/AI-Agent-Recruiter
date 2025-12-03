@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 from langchain_core.tools import tool
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -122,7 +124,7 @@ if __name__ == "__main__":
     if sheet_id:
         print("Testing Google Form integration...\n")
         get_form_column_mapping(sheet_id)
-        candidates = fetch_google_form_responses(sheet_id)
+        candidates = fetch_google_form_responses.invoke(sheet_id)
         print(f"\nFetched {len(candidates)} candidates")
     else:
         print("Set GOOGLE_FORM_SHEET_ID in .env file")

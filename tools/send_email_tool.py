@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 from langchain_core.tools import tool
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -68,3 +70,13 @@ From: Affan Ahmad - HR Department <onboarding@resend.dev>
 """
 #14RQTJQLQD48N7XL21JT627M
 #617242943447-5uoai7kah6q4kmkso2u2t2n4pje0gvse.apps.googleusercontent.com - Client id
+
+if __name__ == "__main__":
+    print("--- GMAIL AUTHENTICATION ---")
+    print("Requesting access to Gmail...")
+    
+    # This triggers the browser login
+    service = get_gmail_service()
+    
+    print("✅ Success! Authentication complete.")
+    print("🔑 'token.pickle' has been created in your project folder.")

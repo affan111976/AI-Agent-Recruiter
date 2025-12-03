@@ -17,7 +17,7 @@ def get_local_ip():
         return "localhost"
 
 # Configuration
-API_HOST = get_local_ip()
+API_HOST = os.getenv("API_HOST", "localhost")
 API_PORT = 8000
 
 # Full API URL

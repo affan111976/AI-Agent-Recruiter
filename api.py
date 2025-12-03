@@ -383,11 +383,12 @@ async def handle_offer_reply_get(
         
         # Check if this is a valid workflow
         if not current_state.values:
+            print(f"⚠️ State not found in memory for {job_id}. Attempting to restore from DB...")
             from db import load_state
-            db_state = load_state(job_id)
-            if db_state:
-                # Restore state to LangGraph
-                graph_app.update_state(config, db_state)
+            saved_state = load_state(job_id)
+            if saved_state:
+                print(f"✅ Restoring state from database...")
+                graph_app.update_state(config, saved_state)
                 current_state = graph_app.get_state(config)
             else:
                 raise Exception(f"No workflow found for job_id: {job_id}")
@@ -1089,7 +1090,16 @@ async def handle_onboarding_offer_form(
         current_state = graph_app.get_state(config)
         
         if not current_state.values:
-            raise Exception(f"No workflow found for job_id: {job_id}")
+            print(f"⚠️ State not found in memory for {job_id}. Attempting to restore from DB...")
+            from db import load_state
+            saved_state = load_state(job_id)
+
+            if saved_state:
+                print(f"✅ Restoring state from database...")
+                graph_app.update_state(config, saved_state)
+                current_state = graph_app.get_state(config)
+            else:
+                raise Exception(f"No workflow found for job_id: {job_id}")
         
         print(f"\n{'='*70}")
         print(f"📋 OFFER RESPONSE RECEIVED VIA FORM")

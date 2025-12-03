@@ -9,6 +9,13 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    volumes:
+      - ./credentials2.json:/app/credentials2.json
+      - ./sheets_token.pickle:/app/sheets_token.pickle
+      - ./credentials.json:/app/credentials.json
+      - ./token.pickle:/app/token.pickle
+      - ./hiring_workflows.json:/app/hiring_workflows.json
+      - ./checkpoints.db:/app/checkpoints.db
 
   # Container 2: The Frontend UI
   frontend:
@@ -21,3 +28,10 @@ services:
     env_file: .env
     depends_on:
       - api
+    volumes:
+      - ./credentials2.json:/app/credentials2.json
+      - ./sheets_token.pickle:/app/sheets_token.pickle
+      - ./credentials.json:/app/credentials.json
+      - ./token.pickle:/app/token.pickle
+      - ./hiring_workflows.json:/app/hiring_workflows.json
+      - ./checkpoints.db:/app/checkpoints.db
