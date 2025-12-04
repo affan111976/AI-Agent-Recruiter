@@ -1,0 +1,49 @@
+name: CD Pipeline
+
+# Trigger deployment only after CI passes on main branch
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # Only run if the CI pipeline was successful
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 1: Copy files to AWS Server
+      - name: Copy files via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "."  # Copy all files from repo
+          target: "/home/ubuntu/app"
+
+      # Step 2: Run Docker Compose on AWS Server
+      - name: Deploy with Docker Compose
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/app
+            
+            # Stop existing containers
+            docker-compose down
+            
+            # Rebuild and start containers in detached mode
+            docker-compose up -d --build
+            
+            # Clean up unused images to save space
+            docker image prune -f
